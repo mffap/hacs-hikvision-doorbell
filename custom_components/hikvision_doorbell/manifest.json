@@ -1,0 +1,12 @@
+{
+  "domain": "hikvision_doorbell",
+  "name": "Hikvision Doorbell",
+  "codeowners": [],
+  "config_flow": true,
+  "documentation": "https://github.com/mffap/hacs-hikvision-doorbell",
+  "integration_type": "device",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/mffap/hacs-hikvision-doorbell/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

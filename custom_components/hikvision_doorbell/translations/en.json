@@ -1,0 +1,188 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to your Hikvision intercom",
+        "description": "Enter the address of the door station, indoor station or access control terminal. This uses the web (ISAPI) port, usually 80, not the SDK port 8000 used by the add-on.",
+        "data": {
+          "host": "Host",
+          "port": "HTTP(S) port",
+          "username": "Username",
+          "password": "Password",
+          "ssl": "Use HTTPS",
+          "verify_ssl": "Verify SSL certificate"
+        }
+      },
+      "device": {
+        "title": "Device type",
+        "description": "Found {model} (serial {serial}).",
+        "data": {
+          "name": "Name",
+          "device_kind": "Device type"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate",
+        "description": "The intercom rejected the stored credentials.",
+        "data": {
+          "username": "Username",
+          "password": "Password"
+        }
+      },
+      "reconfigure": {
+        "title": "Change connection settings",
+        "data": {
+          "host": "Host",
+          "port": "HTTP(S) port",
+          "username": "Username",
+          "password": "Password",
+          "ssl": "Use HTTPS",
+          "verify_ssl": "Verify SSL certificate"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect",
+      "invalid_auth": "Invalid username or password. Note: Hikvision devices lock the account for a while after several failed attempts.",
+      "unknown": "Unexpected response from the device"
+    },
+    "abort": {
+      "already_configured": "Device is already configured",
+      "reauth_successful": "Re-authentication was successful",
+      "reconfigure_successful": "Reconfiguration was successful",
+      "wrong_device": "This address belongs to a different device"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Doorbell options",
+        "data": {
+          "call_status_interval": "Call status poll interval (0 = event stream only)",
+          "ring_reset": "Reset 'ringing' after (only without call status polling)",
+          "door_count": "Number of door relays (-1 = auto detect)",
+          "com_count": "Number of COM outputs (-1 = auto detect)",
+          "enable_scenes": "Scene selector",
+          "enable_alarm": "Alarm switch",
+          "rtsp_port": "RTSP port"
+        }
+      }
+    }
+  },
+  "selector": {
+    "device_kind": {
+      "options": {
+        "outdoor": "Door station (outdoor)",
+        "indoor": "Indoor station",
+        "access_control": "Access control terminal"
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "event_stream": {
+        "name": "Event stream"
+      }
+    },
+    "button": {
+      "answer_call": {
+        "name": "Answer call"
+      },
+      "reject_call": {
+        "name": "Reject call"
+      },
+      "hangup_call": {
+        "name": "Hang up call"
+      },
+      "mute_audio": {
+        "name": "Mute audio output"
+      },
+      "unmute_audio": {
+        "name": "Unmute audio output"
+      },
+      "open_door": {
+        "name": "Open door {door}"
+      },
+      "take_snapshot": {
+        "name": "Take snapshot"
+      }
+    },
+    "event": {
+      "doorbell": {
+        "name": "Doorbell",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "ring": "Ring"
+            }
+          }
+        }
+      },
+      "access_control": {
+        "name": "Access control"
+      },
+      "device_event": {
+        "name": "Device event"
+      }
+    },
+    "image": {
+      "last_snapshot": {
+        "name": "Last snapshot"
+      }
+    },
+    "select": {
+      "scene": {
+        "name": "Scene",
+        "state": {
+          "at_home": "At home",
+          "go_out": "Go out",
+          "go_to_bed": "Go to bed",
+          "custom": "Custom"
+        }
+      }
+    },
+    "sensor": {
+      "call_state": {
+        "name": "Call state",
+        "state": {
+          "idle": "Idle",
+          "ringing": "Ringing",
+          "on_call": "On call",
+          "unknown": "Unknown"
+        }
+      }
+    },
+    "switch": {
+      "com_output": {
+        "name": "COM {output}"
+      },
+      "alarm": {
+        "name": "Alarm"
+      }
+    }
+  },
+  "services": {
+    "isapi_request": {
+      "name": "ISAPI request",
+      "description": "Send a raw ISAPI request to an intercom and return the decoded response.",
+      "fields": {
+        "device_id": {
+          "name": "Device",
+          "description": "The intercom to send the request to."
+        },
+        "method": {
+          "name": "Method",
+          "description": "HTTP method."
+        },
+        "path": {
+          "name": "Path",
+          "description": "ISAPI path, starting with /ISAPI/."
+        },
+        "body": {
+          "name": "Body",
+          "description": "Optional XML or JSON request body."
+        }
+      }
+    }
+  }
+}

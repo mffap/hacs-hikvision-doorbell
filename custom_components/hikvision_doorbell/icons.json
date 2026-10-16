@@ -1,0 +1,37 @@
+{
+  "entity": {
+    "button": {
+      "answer_call": { "default": "mdi:phone" },
+      "reject_call": { "default": "mdi:phone-cancel" },
+      "hangup_call": { "default": "mdi:phone-hangup" },
+      "mute_audio": { "default": "mdi:volume-off" },
+      "unmute_audio": { "default": "mdi:volume-high" },
+      "open_door": { "default": "mdi:door-open" },
+      "take_snapshot": { "default": "mdi:camera" }
+    },
+    "sensor": {
+      "call_state": {
+        "default": "mdi:phone",
+        "state": {
+          "idle": "mdi:phone-hangup",
+          "ringing": "mdi:phone-ring",
+          "on_call": "mdi:phone-in-talk"
+        }
+      }
+    },
+    "event": {
+      "access_control": { "default": "mdi:card-account-details" },
+      "device_event": { "default": "mdi:alert-circle-outline" }
+    },
+    "select": {
+      "scene": { "default": "mdi:home-switch" }
+    },
+    "switch": {
+      "com_output": { "default": "mdi:electric-switch" },
+      "alarm": { "default": "mdi:shield-home" }
+    }
+  },
+  "services": {
+    "isapi_request": { "service": "mdi:api" }
+  }
+}

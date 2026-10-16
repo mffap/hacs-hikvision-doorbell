@@ -1,0 +1,22 @@
+isapi_request:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: hikvision_doorbell
+    method:
+      default: GET
+      selector:
+        select:
+          options: ["GET", "PUT", "POST", "DELETE"]
+    path:
+      required: true
+      example: "/ISAPI/VideoIntercom/callStatus?format=json"
+      selector:
+        text:
+    body:
+      example: '{"CallSignal":{"cmdType":"reject"}}'
+      selector:
+        text:
+          multiline: true
