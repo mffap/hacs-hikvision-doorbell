@@ -55,6 +55,10 @@ _LOGGER = logging.getLogger(__name__)
 
 SLOW_POLL_SECONDS = 15  # scenes / alarm state, like the add-on default
 STREAM_BACKOFF = (5, 10, 30, 60)
+# Hikvision occasionally answers 401 for valid credentials (nonce rotation,
+# session limits), so only ask for new credentials when it keeps happening.
+AUTH_FAILURE_THRESHOLD = 3
+AUTH_RETRY_SECONDS = 30  # slow down while failing so the device does not lock us out
 
 
 @dataclass
@@ -102,6 +106,7 @@ class HikvisionDoorbellCoordinator(DataUpdateCoordinator[DoorbellState]):
         self._ring_reset_unsub: CALLBACK_TYPE | None = None
         self._stream_task: asyncio.Task | None = None
         self._stream_supported = True
+        self._auth_failures = 0
         self.last_snapshot: bytes | None = None
         self.last_snapshot_time = None
 
@@ -159,12 +164,29 @@ class HikvisionDoorbellCoordinator(DataUpdateCoordinator[DoorbellState]):
                     except ISAPINotSupported:
                         self.alarm_enabled = False
         except ISAPIAuthError as err:
-            raise ConfigEntryAuthFailed(str(err)) from err
+            self._auth_failures += 1
+            if self._auth_failures >= AUTH_FAILURE_THRESHOLD:
+                raise ConfigEntryAuthFailed(str(err)) from err
+            _LOGGER.warning(
+                "%s rejected the credentials (%d/%d), retrying in %ds: %s",
+                self.device.name, self._auth_failures, AUTH_FAILURE_THRESHOLD, AUTH_RETRY_SECONDS, err,
+            )
+            self.update_interval = timedelta(seconds=AUTH_RETRY_SECONDS)
+            raise UpdateFailed(str(err)) from err
         except ISAPIConnectionError as err:
             raise UpdateFailed(str(err)) from err
         except ISAPIError as err:
             raise UpdateFailed(str(err)) from err
+        if self._auth_failures:
+            self._auth_failures = 0
+            self.update_interval = self._normal_update_interval
         return state
+
+    @property
+    def _normal_update_interval(self) -> timedelta:
+        if self.call_status_supported:
+            return timedelta(seconds=self.poll_interval)
+        return timedelta(seconds=SLOW_POLL_SECONDS)
 
     # ---------------------------------------------------------- call handling
 
@@ -252,10 +274,25 @@ class HikvisionDoorbellCoordinator(DataUpdateCoordinator[DoorbellState]):
                 )
                 self._stream_supported = False
                 return
-            except ISAPIAuthError:
-                _LOGGER.error("Event stream of %s rejected the credentials", self.device.name)
-                self.config_entry.async_start_reauth(self.hass)
-                return
+            except ISAPIAuthError as err:
+                failures = len(STREAM_BACKOFF)
+                if self.call_status_supported and self.last_update_success:
+                    # Polling with the same credentials works, so they are not
+                    # wrong: the user probably lacks the event/notify permission.
+                    _LOGGER.warning(
+                        "Event stream of %s was refused (%s) although polling works; "
+                        "check that the user may receive event notifications",
+                        self.device.name, err,
+                    )
+                else:
+                    self._auth_failures += 1
+                    _LOGGER.warning(
+                        "Event stream of %s rejected the credentials (%d/%d): %s",
+                        self.device.name, self._auth_failures, AUTH_FAILURE_THRESHOLD, err,
+                    )
+                    if self._auth_failures >= AUTH_FAILURE_THRESHOLD:
+                        self.config_entry.async_start_reauth(self.hass)
+                        return
             except ISAPIError as err:
                 failures += 1
                 _LOGGER.debug("Event stream of %s dropped: %s", self.device.name, err)
@@ -269,6 +306,8 @@ class HikvisionDoorbellCoordinator(DataUpdateCoordinator[DoorbellState]):
 
     @callback
     def _set_stream_connected(self, connected: bool) -> None:
+        if connected and not self.call_status_supported:
+            self._auth_failures = 0
         if self.data.stream_connected != connected:
             self.async_set_updated_data(replace(self.data, stream_connected=connected))
 

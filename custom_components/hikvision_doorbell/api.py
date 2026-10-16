@@ -139,6 +139,7 @@ class HikvisionISAPI:
     ) -> aiohttp.ClientResponse:
         """Send a request, answering the auth challenge. Caller must release()."""
         url = self.base_url + path
+        detail = ""
         for attempt in range(3):
             headers = self._auth_headers(method, path)
             if content_type:
@@ -156,12 +157,25 @@ class HikvisionISAPI:
                 return response
             had_auth = "Authorization" in headers
             retry = self._handle_challenge(response)
-            response.release()
+            try:
+                detail = (await response.read())[:500].decode("utf-8", errors="replace").strip()
+            except (aiohttp.ClientError, asyncio.TimeoutError):
+                detail = ""
+            finally:
+                response.release()
+            _LOGGER.debug(
+                "401 from %s %s (attempt %d, sent auth: %s, challenge: %s): %s",
+                method, path, attempt + 1, had_auth,
+                response.headers.getall("WWW-Authenticate", []), detail,
+            )
             # A 401 right after sending fresh credentials means they are wrong,
             # unless the nonce went stale (we retry once more for that).
             if not retry or (had_auth and attempt >= 1):
                 break
-        raise ISAPIAuthError("Authentication failed, check username and password")
+        message = "Authentication failed, check username and password"
+        if "lock" in detail.lower():
+            message = f"Device rejected the login (account or IP may be locked): {detail}"
+        raise ISAPIAuthError(f"{message} [{method} {path}]")
 
     async def request(
         self,
