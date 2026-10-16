@@ -284,6 +284,8 @@ class HikvisionDoorbellCoordinator(DataUpdateCoordinator[DoorbellState]):
                         "check that the user may receive event notifications",
                         self.device.name, err,
                     )
+                elif self._auth_failures >= AUTH_FAILURE_THRESHOLD:
+                    return  # polling already asked for new credentials
                 else:
                     self._auth_failures += 1
                     _LOGGER.warning(

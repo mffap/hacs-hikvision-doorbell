@@ -50,8 +50,9 @@ class DigestAuth:
         scheme, params = parse_www_authenticate(www_authenticate)
         if scheme != "digest" or "nonce" not in params:
             return False
-        if self._challenge is None or self._challenge.get("nonce") != params["nonce"]:
-            self._nonce_count = 0
+        # Every challenge starts a new count, even when the server repeats the
+        # nonce: Hikvision re-sends the same nonce but rejects the higher nc.
+        self._nonce_count = 0
         self._challenge = params
         return True
 

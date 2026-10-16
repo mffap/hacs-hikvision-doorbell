@@ -99,6 +99,9 @@ class HikvisionISAPI:
         self._ssl: bool = verify_ssl if ssl else True
         self._digest = DigestAuth(username, password)
         self._use_basic = False
+        # Some firmwares reject a digest nonce once it was used; we then answer
+        # a fresh challenge for every request instead of reusing the last one.
+        self._reuse_nonce = True
         self._lock = asyncio.Lock()
 
     @property
@@ -110,10 +113,10 @@ class HikvisionISAPI:
 
     # ------------------------------------------------------------------ core
 
-    def _auth_headers(self, method: str, path: str) -> dict[str, str]:
+    def _auth_headers(self, method: str, path: str, fresh: bool) -> dict[str, str]:
         if self._use_basic:
             return {"Authorization": aiohttp.BasicAuth(self.username, self.password).encode()}
-        if self._digest.has_challenge:
+        if self._digest.has_challenge and (fresh or self._reuse_nonce):
             return {"Authorization": self._digest.header(method, path)}
         return {}
 
@@ -140,8 +143,10 @@ class HikvisionISAPI:
         """Send a request, answering the auth challenge. Caller must release()."""
         url = self.base_url + path
         detail = ""
+        fresh = False  # holding a challenge received during this call
+        reuse_rejected = False
         for attempt in range(3):
-            headers = self._auth_headers(method, path)
+            headers = self._auth_headers(method, path, fresh)
             if content_type:
                 headers["Content-Type"] = content_type
             try:
@@ -153,9 +158,12 @@ class HikvisionISAPI:
             except aiohttp.ClientError as err:
                 raise ISAPIConnectionError(f"Cannot connect to {self.host}: {err}") from err
 
-            if response.status != 401:
-                return response
             had_auth = "Authorization" in headers
+            if response.status != 401:
+                if reuse_rejected and self._reuse_nonce:
+                    _LOGGER.debug("%s rejects reused nonces, answering a fresh challenge per request", self.host)
+                    self._reuse_nonce = False
+                return response
             retry = self._handle_challenge(response)
             try:
                 detail = (await response.read())[:500].decode("utf-8", errors="replace").strip()
@@ -168,10 +176,13 @@ class HikvisionISAPI:
                 method, path, attempt + 1, had_auth,
                 response.headers.getall("WWW-Authenticate", []), detail,
             )
-            # A 401 right after sending fresh credentials means they are wrong,
-            # unless the nonce went stale (we retry once more for that).
-            if not retry or (had_auth and attempt >= 1):
+            # Credentials computed from a challenge we just received are only
+            # rejected when they are wrong; a reused nonce may simply be stale.
+            if not retry or (had_auth and fresh):
                 break
+            if had_auth:
+                reuse_rejected = True
+            fresh = True
         message = "Authentication failed, check username and password"
         if "lock" in detail.lower():
             message = f"Device rejected the login (account or IP may be locked): {detail}"

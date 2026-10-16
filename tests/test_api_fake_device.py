@@ -32,6 +32,9 @@ class FakeDevice:
         self.call_status = "idle"
         self.requests: list[tuple[str, str, str]] = []
         self.auth_failures = 0
+        # Like some intercom firmwares: re-sends the same nonce in every
+        # challenge but only accepts it with nc=1 (no reuse)
+        self.single_use_nonce = False
         self.stream_events: asyncio.Queue[bytes] = asyncio.Queue()
 
     def check_auth(self, request: web.Request) -> bool:
@@ -46,6 +49,8 @@ class FakeDevice:
         ha2 = md5(f"{request.method}:{params['uri']}")
         expected = md5(f"{ha1}:{NONCE}:{params['nc']}:{params['cnonce']}:auth:{ha2}")
         ok = params["username"] == USER and params["response"] == expected and params["uri"] == request.path_qs
+        if self.single_use_nonce and params["nc"] != "00000001":
+            ok = False
         if not ok:
             self.auth_failures += 1
         return ok
@@ -211,6 +216,16 @@ async def main() -> None:
         except Exception as err:  # noqa: BLE001
             assert type(err).__name__ == "ISAPIConnectionError", repr(err)
         assert connected == [True, False]
+
+    # Firmware that rejects reused nonces: the first reuse costs one rejected
+    # request, after that every request answers a fresh challenge
+    device.single_use_nonce = True
+    device.auth_failures = 0
+    async with ClientSession() as session:
+        api = HikvisionISAPI(session, "127.0.0.1", port, USER, PASSWORD)
+        for _ in range(5):
+            assert await api.get_call_status() == "ring"
+        assert device.auth_failures == 1, device.auth_failures
 
     await runner.cleanup()
     print("fake device tests passed:", len(device.requests), "authenticated requests")
