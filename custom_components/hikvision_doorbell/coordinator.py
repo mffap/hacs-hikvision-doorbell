@@ -59,7 +59,9 @@ STREAM_BACKOFF = (5, 10, 30, 60)
 # Hikvision occasionally answers 401 for valid credentials (nonce rotation,
 # session limits), so only ask for new credentials when it keeps happening.
 AUTH_FAILURE_THRESHOLD = 3
-AUTH_RETRY_SECONDS = 30  # slow down while failing so the device does not lock us out
+# Every rejected login counts towards the device's lockout (typically a few
+# failures lock the client IP for 30 minutes), so retry slowly.
+AUTH_RETRY_SECONDS = 300
 
 
 @dataclass
@@ -133,8 +135,10 @@ class HikvisionDoorbellCoordinator(DataUpdateCoordinator[DoorbellState]):
 
     async def _async_update_data(self) -> DoorbellState:
         state = replace(self.data) if self.data else DoorbellState()
+        requested = False
         try:
             if self.call_status_supported:
+                requested = True
                 try:
                     raw = await self.api.get_call_status()
                 except ISAPINotSupported:
@@ -156,6 +160,7 @@ class HikvisionDoorbellCoordinator(DataUpdateCoordinator[DoorbellState]):
             now = time.monotonic()
             if (self.scenes_enabled or self.alarm_enabled) and now - self._last_slow_poll >= SLOW_POLL_SECONDS:
                 self._last_slow_poll = now
+                requested = True
                 if self.scenes_enabled:
                     try:
                         state.scene = await self.api.get_scene()
@@ -180,7 +185,7 @@ class HikvisionDoorbellCoordinator(DataUpdateCoordinator[DoorbellState]):
             raise UpdateFailed(str(err)) from err
         except ISAPIError as err:
             raise UpdateFailed(str(err)) from err
-        if self._auth_failures:
+        if self._auth_failures and requested:
             self._auth_failures = 0
             self.update_interval = self._normal_update_interval
         return state
@@ -288,7 +293,6 @@ class HikvisionDoorbellCoordinator(DataUpdateCoordinator[DoorbellState]):
                     )
                 return
             except ISAPIAuthError as err:
-                failures = len(STREAM_BACKOFF)
                 if self.call_status_supported and self.last_update_success:
                     # Polling with the same credentials works, so they are not
                     # wrong: the user probably lacks the event/notify permission.
@@ -302,12 +306,14 @@ class HikvisionDoorbellCoordinator(DataUpdateCoordinator[DoorbellState]):
                 else:
                     self._auth_failures += 1
                     _LOGGER.warning(
-                        "Event stream of %s rejected the credentials (%d/%d): %s",
-                        self.device.name, self._auth_failures, AUTH_FAILURE_THRESHOLD, err,
+                        "Event stream of %s rejected the credentials (%d/%d), retrying in %ds: %s",
+                        self.device.name, self._auth_failures, AUTH_FAILURE_THRESHOLD, AUTH_RETRY_SECONDS, err,
                     )
                     if self._auth_failures >= AUTH_FAILURE_THRESHOLD:
                         self.config_entry.async_start_reauth(self.hass)
                         return
+                await asyncio.sleep(AUTH_RETRY_SECONDS)
+                continue
             except ISAPIError as err:
                 failures += 1
                 _LOGGER.debug("Event stream of %s dropped: %s", self.device.name, err)

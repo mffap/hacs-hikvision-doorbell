@@ -183,6 +183,9 @@ class HikvisionISAPI:
             if had_auth:
                 reuse_rejected = True
             fresh = True
+        # Start the next request from scratch: retrying with the rejected
+        # challenge would cost an extra failed login on the device.
+        self._digest.reset()
         message = "Authentication failed, check username and password"
         if "lock" in detail.lower():
             message = f"Device rejected the login (account or IP may be locked): {detail}"

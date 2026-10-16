@@ -150,6 +150,13 @@ async def main() -> None:
         except ISAPIAuthError:
             pass
         assert device.auth_failures == 1, device.auth_failures
+        # Retrying must not replay the rejected challenge: one failure per call
+        try:
+            await bad.get_device_info()
+            raise AssertionError("expected auth error")
+        except ISAPIAuthError:
+            pass
+        assert device.auth_failures == 2, device.auth_failures
 
         api = HikvisionISAPI(session, "127.0.0.1", port, USER, PASSWORD)
         info = await api.get_device_info()
