@@ -58,7 +58,7 @@
       "init": {
         "title": "Doorbell options",
         "data": {
-          "call_status_interval": "Call status poll interval (0 = event stream only)",
+          "call_status_interval": "Call status poll interval (0 = event stream only, recommended)",
           "ring_reset": "Reset 'ringing' after (only without call status polling)",
           "door_count": "Number of door relays (-1 = auto detect)",
           "com_count": "Number of COM outputs (-1 = auto detect)",

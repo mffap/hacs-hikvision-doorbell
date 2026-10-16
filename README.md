@@ -11,7 +11,8 @@ Home Assistant over MQTT. This integration instead talks to the device directly 
 
 - no add-on, no MQTT broker, no native libraries – works on HA OS, Container, Core, any CPU
 - entities are created through a normal config flow (Settings → Devices & services)
-- real-time events come from the device's `alertStream`, the call state is polled
+- rings and other events come from the device's `alertStream` in real time; polling the call
+  state is optional
 
 ## Installation
 
@@ -22,8 +23,8 @@ Home Assistant over MQTT. This integration instead talks to the device directly 
 
 Add one entry per device (door station and indoor station are separate entries, as in the add-on).
 
-> Hikvision devices lock the account after several failed logins. The integration stops
-> polling and asks you to re-authenticate as soon as credentials are rejected.
+> Hikvision devices lock the account after several failed logins. The integration backs off
+> after a rejected login and asks you to re-authenticate after three rejections in a row.
 
 ## Entities
 
@@ -78,8 +79,8 @@ actions:
 
 | Option | Default | |
 |---|---|---|
-| Call status poll interval | 2 s | `0` relies on the event stream only |
-| Reset 'ringing' after | 60 s | only used when the device cannot report its call status |
+| Call status poll interval | 0 (off) | `0` relies on the event stream only. Set e.g. `2` to also poll `callStatus` (tracks answered/ended calls, but adds a request every few seconds). Devices without an event stream fall back to 2 s unless you set this explicitly |
+| Reset 'ringing' after | 60 s | how long a ring stays `ringing` when the call status is not polled |
 | Number of door relays | auto | auto uses door capabilities / `electroLockNum` / IO outputs, like the add-on |
 | Number of COM outputs | auto | indoor only, from `alarmOutNum` |
 | Scene selector / Alarm switch | on / off | indoor only |

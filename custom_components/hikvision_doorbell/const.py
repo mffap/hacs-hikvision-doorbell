@@ -22,7 +22,8 @@ CONF_RTSP_PORT: Final = "rtsp_port"
 DEFAULT_HTTP_PORT: Final = 80
 DEFAULT_HTTPS_PORT: Final = 443
 DEFAULT_RTSP_PORT: Final = 554
-DEFAULT_CALL_STATUS_INTERVAL: Final = 2  # seconds, 0 disables polling
+DEFAULT_CALL_STATUS_INTERVAL: Final = 0  # seconds, 0 = rely on the event stream only
+FALLBACK_CALL_STATUS_INTERVAL: Final = 2  # used when the device has no event stream
 DEFAULT_RING_RESET: Final = 60  # seconds, used when the device cannot report call status
 AUTO: Final = -1  # door/com count auto-detection
 

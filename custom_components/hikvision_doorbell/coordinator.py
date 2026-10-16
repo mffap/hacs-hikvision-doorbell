@@ -1,4 +1,4 @@
-"""Coordinator: polls call status and consumes the device event stream."""
+"""Coordinator: consumes the device event stream and optionally polls call status."""
 
 from __future__ import annotations
 
@@ -44,6 +44,7 @@ from .const import (
     DEVICE_EVENT_TYPES,
     DOMAIN,
     EVENT_DEVICE_EVENT,
+    FALLBACK_CALL_STATUS_INTERVAL,
     IGNORED_EVENT_TYPES,
     KIND_INDOOR,
 )
@@ -102,6 +103,8 @@ class HikvisionDoorbellCoordinator(DataUpdateCoordinator[DoorbellState]):
         self.scenes_enabled = kind == KIND_INDOOR and bool(options.get(CONF_ENABLE_SCENES, False))
         self.alarm_enabled = kind == KIND_INDOOR and bool(options.get(CONF_ENABLE_ALARM, False))
         self.call_status_supported = self.poll_interval > 0
+        # Without an explicit choice we may fall back to polling (no event stream)
+        self._poll_interval_chosen = CONF_CALL_STATUS_INTERVAL in options
         self._last_slow_poll = 0.0
         self._ring_reset_unsub: CALLBACK_TYPE | None = None
         self._stream_task: asyncio.Task | None = None
@@ -268,11 +271,21 @@ class HikvisionDoorbellCoordinator(DataUpdateCoordinator[DoorbellState]):
                 await self.api.listen_events(self._handle_event, self._set_stream_connected)
                 failures = 0
             except ISAPINotSupported:
-                _LOGGER.warning(
-                    "%s does not provide an event stream; only polled data will be available",
-                    self.device.name,
-                )
                 self._stream_supported = False
+                if not self.call_status_supported and not self._poll_interval_chosen:
+                    _LOGGER.warning(
+                        "%s does not provide an event stream; polling the call status every %ds instead",
+                        self.device.name, FALLBACK_CALL_STATUS_INTERVAL,
+                    )
+                    self.poll_interval = FALLBACK_CALL_STATUS_INTERVAL
+                    self.call_status_supported = True
+                    self.update_interval = self._normal_update_interval
+                    await self.async_request_refresh()
+                else:
+                    _LOGGER.warning(
+                        "%s does not provide an event stream; only polled data will be available",
+                        self.device.name,
+                    )
                 return
             except ISAPIAuthError as err:
                 failures = len(STREAM_BACKOFF)
